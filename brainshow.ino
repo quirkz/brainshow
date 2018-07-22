@@ -3,17 +3,19 @@
   #include <avr/power.h>
 #endif
 
+#define STRIP_LEN 300
+#define STRIP_CNT 1
+
 #define NEURON_PIN_0 2
 #define NEURON_PIN_1 3
 #define NEURON_PIN_2 4
 
-#define NEURON_CNT_0 300
+#define NEURON_CNT_0 STRIP_LEN
 #define NEURON_CNT_1 0
 #define NEURON_CNT_2 0
 
-#define STRIP_LEN 300
+uint32_t lens[] = { NEURON_CNT_0, NEURON_CNT_1, NEURON_CNT_2 };
 
-#define STRIP_CNT 1
 
 
 // Parameter 1 = number of pixels in strip
@@ -32,36 +34,79 @@ Adafruit_NeoPixel strips[] =  {
 
 enum TraceState {
   FINISHED,
-  RUNNING,
-  PAUSED,
+  RUNNING
 };
 
 struct Trace {
-  int len;
-  int dir;
-  int move_speed;
-  int cycle_speed;
-  int pause_time;
-  int color;
-  int start;
-  int state;
-  int counter;
+  uint32_t len;
+  uint32_t seg_len;
+  uint32_t dir;
+  int32_t move_speed;
+  uint32_t cycle_speed;
+  uint32_t pause_time;
+  uint32_t color;
+  int32_t pos;
 } traces[STRIP_CNT];
-
-void fireNeuron() {
-
-}
 
 void generateNeuralSignal(int trace_idx) {
   struct Trace t;
+  
+  memset( &t, 0, sizeof(struct Trace) );
 
-  t.len = random( 10, 30 );
+  t.seg_len = random( 2, 7 );
+  t.len = t.seg_len * 4;
   t.dir = random( 0, 1 ) ? -1 : 1;
   t.move_speed = random(1, 3);
   t.cycle_speed = random(1, 3);
   t.pause_time = random( 1, 5);
+  uint32_t max_clr = 127 / 2;
+  t.color = strips[0].Color(random(0,max_clr), random(0,max_clr), random(0,max_clr));
+  
+  memcpy( &traces[trace_idx], &t, sizeof(struct Trace) );
 }
 
+int moveNeuralSignal(int trace_idx) {
+  strips[trace_idx].clear();
+  
+  struct Trace *t = &traces[trace_idx];  
+  uint32_t pos = t->pos;
+  uint32_t seg_len = t->seg_len;
+  uint32_t clr = t->color;
+  uint32_t i;
+    
+  t->move_speed += random(0,100) / 95;
+  t->move_speed = min(4, t->move_speed);
+  
+  t->pos += t->move_speed;
+  pos = t->pos;
+  
+  if (pos < 0)
+    pos = 0;
+
+  // segment start one color wheel to middle
+  for (i = 0; i < seg_len; i += 1, pos += 1) {
+    strips[trace_idx].setPixelColor(pos, clr);
+    clr = Wheel( clr, strips );
+  }
+
+  // segment middle is random 
+  uint32_t max_clr = 127 / random(1,4), random_clr;
+  random_clr = strips[i].Color(random(0,max_clr), random(0,max_clr), random(0,max_clr));
+  for (i = 0; i < 2*seg_len; i += 1, pos += 1, max_clr += 1) {
+    random_clr = strips[i].Color(random(0,max_clr), random(0,max_clr), random(0,max_clr));
+    strips[trace_idx].setPixelColor(pos, random_clr);
+  }
+  
+  // fade out with wheel
+  clr = t->color;
+  pos += seg_len - 1;
+  for (i = 0; i < seg_len; i += 1, pos -= 1) {
+    strips[trace_idx].setPixelColor(pos, clr);
+    clr = Wheel( clr, strips );
+  }
+
+  return pos < lens[trace_idx];
+}
 
 
 // Input a value 0 to 255 to get a color value.
@@ -110,7 +155,7 @@ void stripTest() {
 
 
 void setup() {
-//  Serial.begin(9600);  
+  Serial.begin(9600);  
   randomSeed(analogRead(0));
   
   pinMode(NEURON_PIN_0, INPUT_PULLUP);
@@ -121,21 +166,20 @@ void setup() {
     strips[i].begin();    
     strips[i].show(); // Initialize all pixels to 'off'
   }
+ 
+  for (int i = 0; i < STRIP_CNT; i += 1) 
+      generateNeuralSignal(i);
 }
 
 void loop() {
-
-  stripTest();
+//  stripTest();
   
+  Serial.print('loop start  ');
   for (int i = 0; i < STRIP_CNT; i += 1) {
-    if (traces[i].state = FINISHED) {
-    
-    } else if (traces[i].state == RUNNING) {
-          
-    } else if (traces[i].state == PAUSED) {
-
-    } 		
+    if (!moveNeuralSignal(i))
+      generateNeuralSignal(i);
+    strips[i].show();
   }
-
+  Serial.println('.. end');
 }
 
