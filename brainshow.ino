@@ -51,6 +51,18 @@ struct Trace {
   int strip;
 } traces[TRACE_CNT];
 
+
+void createNeuralInterferance(int trace_idx) {
+  
+}
+
+
+void modulateNeuralInterferance(int trace_idx) {
+  
+}
+
+
+
 void generateNeuralSignal(int trace_idx, int strip) {
   struct Trace t;
   
@@ -60,18 +72,14 @@ void generateNeuralSignal(int trace_idx, int strip) {
   t.seg_len = random( 2, 7 );
   t.len = t.seg_len * 4;
   t.dir = random( 0, 2 );
-  t.pos = t.dir > 0 ? 0 : (lens[trace_idx] - t.len - 1);
+  t.pos = random( 50, 250 ); // t.dir > 0 ? 0 : (lens[trace_idx] - t.len - 1);
   t.move_speed = random(1, 4);
   t.cycle_speed = random(1, 3);
-  t.pause = millis() + random(250, 750);
+  t.pause = millis() + random(50, 350);
   uint32_t max_clr = 127 / 2;
   t.color = strips[0].Color(random(0,max_clr), random(0,max_clr), random(0,max_clr));
   
   memcpy( &traces[trace_idx], &t, sizeof(struct Trace) );
-}
-
-void runTwinkles(int trace_idx) {
-  
 }
 
 int moveNeuralSignal(int trace_idx) {
@@ -162,7 +170,7 @@ void loop() {
 
     for (int i = 0; i < TRACE_CNT; i += 1) {
       if (!moveNeuralSignal(i))
-        generateNeuralSignal(i, j);
+        generateNeuralSignal(i, 0);
     }
     
     strips[j].show();
