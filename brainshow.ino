@@ -37,75 +37,90 @@ enum TraceState {
   RUNNING
 };
 
+#define TRACE_CNT 5
+
 struct Trace {
   uint32_t len;
   uint32_t seg_len;
   uint32_t dir;
   int32_t move_speed;
   uint32_t cycle_speed;
-  uint32_t pause_time;
+  uint32_t pause;
   uint32_t color;
   int32_t pos;
-} traces[STRIP_CNT];
+  int strip;
+} traces[TRACE_CNT];
 
-void generateNeuralSignal(int trace_idx) {
+void generateNeuralSignal(int trace_idx, int strip) {
   struct Trace t;
   
   memset( &t, 0, sizeof(struct Trace) );
 
+  t.strip = strip;
   t.seg_len = random( 2, 7 );
   t.len = t.seg_len * 4;
-  t.dir = random( 0, 1 ) ? -1 : 1;
-  t.move_speed = random(1, 3);
+  t.dir = random( 0, 2 );
+  t.pos = t.dir > 0 ? 0 : (lens[trace_idx] - t.len - 1);
+  t.move_speed = random(1, 4);
   t.cycle_speed = random(1, 3);
-  t.pause_time = random( 1, 5);
+  t.pause = millis() + random(250, 750);
   uint32_t max_clr = 127 / 2;
   t.color = strips[0].Color(random(0,max_clr), random(0,max_clr), random(0,max_clr));
   
   memcpy( &traces[trace_idx], &t, sizeof(struct Trace) );
 }
 
+void runTwinkles(int trace_idx) {
+  
+}
+
 int moveNeuralSignal(int trace_idx) {
-  strips[trace_idx].clear();
   
   struct Trace *t = &traces[trace_idx];  
+  Adafruit_NeoPixel *strip = &strips[t->strip];
+  
   uint32_t pos = t->pos;
   uint32_t seg_len = t->seg_len;
   uint32_t clr = t->color;
   uint32_t i;
+
+  if ((t->pos >= lens[trace_idx]) || (t->pos < 0)) {
+    return t->pause > millis();
+  }
     
-  t->move_speed += random(0,100) / 95;
-  t->move_speed = min(4, t->move_speed);
+  t->move_speed += random(0,100) / 97;
+  t->move_speed = min(5, t->move_speed);
   
-  t->pos += t->move_speed;
+  if (t->dir > 0)
+    t->pos += t->move_speed;
+  else
+    t->pos -= t->move_speed;
+    
   pos = t->pos;
   
-  if (pos < 0)
-    pos = 0;
-
   // segment start one color wheel to middle
   for (i = 0; i < seg_len; i += 1, pos += 1) {
-    strips[trace_idx].setPixelColor(pos, clr);
-    clr = Wheel( clr, strips );
+    strip->setPixelColor(pos, clr);
+    clr = Wheel( clr, strip );
   }
 
   // segment middle is random 
   uint32_t max_clr = 127 / random(1,4), random_clr;
-  random_clr = strips[i].Color(random(0,max_clr), random(0,max_clr), random(0,max_clr));
+  random_clr = strip->Color(random(0,max_clr), random(0,max_clr), random(0,max_clr));
   for (i = 0; i < 2*seg_len; i += 1, pos += 1, max_clr += 1) {
-    random_clr = strips[i].Color(random(0,max_clr), random(0,max_clr), random(0,max_clr));
-    strips[trace_idx].setPixelColor(pos, random_clr);
+    random_clr = strip->Color(random(0,max_clr), random(0,max_clr), random(0,max_clr));
+    strip->setPixelColor(pos, random_clr);
   }
   
   // fade out with wheel
   clr = t->color;
   pos += seg_len - 1;
   for (i = 0; i < seg_len; i += 1, pos -= 1) {
-    strips[trace_idx].setPixelColor(pos, clr);
-    clr = Wheel( clr, strips );
+    strip->setPixelColor(pos, clr);
+    clr = Wheel( clr, strip );
   }
-
-  return pos < lens[trace_idx];
+  
+  return 1;    
 }
 
 
@@ -124,38 +139,8 @@ uint32_t Wheel(byte WheelPos, Adafruit_NeoPixel *strip) {
   return strip->Color(WheelPos * 3, 255 - WheelPos * 3, 0);
 }
 
-
-void stripTest() {
-  static int32_t pixel = -1;
-  
-  pixel += 1;
-  
-  if (pixel >= STRIP_LEN) {
-    pixel = 0; 
-  }
-  
-  int32_t mru = pixel - 1;
-  
-  if (mru < 0)
-    mru = STRIP_LEN - 1;
-  
-  for (int i = 0; i < STRIP_CNT; i += 1) {
-    uint32_t off = strips[i].Color(0, 0, 0);
-    
-    strips[i].setPixelColor(mru, off);
-    uint32_t random_clr = strips[i].Color(random(0,127), random(0,127), random(0,127));
-    strips[i].setPixelColor(pixel, random_clr);
-    random_clr = strips[i].Color(random(0,127), random(0,127), random(0,127));
-    strips[i].setPixelColor(pixel + 1, random_clr);
-    random_clr = strips[i].Color(random(0,127), random(0,127), random(0,127));
-    strips[i].setPixelColor(pixel + 2, random_clr);
-    strips[i].show(); // Initialize all pixels to 'off'
-  }
-}
-
-
 void setup() {
-  Serial.begin(9600);  
+//  Serial.begin(9600);  
   randomSeed(analogRead(0));
   
   pinMode(NEURON_PIN_0, INPUT_PULLUP);
@@ -167,19 +152,20 @@ void setup() {
     strips[i].show(); // Initialize all pixels to 'off'
   }
  
-  for (int i = 0; i < STRIP_CNT; i += 1) 
-      generateNeuralSignal(i);
+  for (int j = 0; j < TRACE_CNT; j += 1)
+    generateNeuralSignal(j, 0);
 }
 
 void loop() {
-//  stripTest();
-  
-  Serial.print('loop start  ');
-  for (int i = 0; i < STRIP_CNT; i += 1) {
-    if (!moveNeuralSignal(i))
-      generateNeuralSignal(i);
-    strips[i].show();
+  for (int j = 0; j < STRIP_CNT; j += 1) {
+    strips[j].clear();
+
+    for (int i = 0; i < TRACE_CNT; i += 1) {
+      if (!moveNeuralSignal(i))
+        generateNeuralSignal(i, j);
+    }
+    
+    strips[j].show();
   }
-  Serial.println('.. end');
 }
 
