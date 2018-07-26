@@ -37,7 +37,7 @@ enum TraceState {
   RUNNING
 };
 
-#define TRACE_CNT 5
+#define TRACE_CNT 4
 
 struct Trace {
   uint32_t len;
@@ -52,14 +52,48 @@ struct Trace {
 } traces[TRACE_CNT];
 
 
-void createNeuralInterferance(int trace_idx) {
+#define MAX_SPARKLES 20
+
+struct Sparkle {
+  int16_t pos; 
+  uint32_t color;  
+  float rads;
+  float inc;
+}
+sparkles[MAX_SPARKLES];
+
+const float Pi = 3.14159;
+
+void modulateNeuralInterferance(int strip_idx) {
   
+  Adafruit_NeoPixel *strip = &strips[strip_idx];
+  for (int i = 0; i < MAX_SPARKLES; i += 1) {
+    
+    if (sparkles[i].pos < 0) {
+      int err_occured = (random( 0, 1000 ) / 995) > 0;
+  
+      if (err_occured) {
+        sparkles[i].pos = random(0, strip->numPixels());
+        sparkles[i].rads = 0;  
+        sparkles[i].inc = (float)random(1,100)/500.0;
+      }
+    } else {
+      
+      if (sparkles[i].rads < Pi) {
+        
+         sparkles[i].rads += sparkles[i].inc;
+         
+         uint16_t bright = (uint16_t)(sin(sparkles[i].rads) * 127.0);
+         
+         uint32_t color = strip->Color( bright, bright, bright);
+         strip->setPixelColor(sparkles[i].pos, color);
+      } else {
+         sparkles[i].pos = -1;
+      }    
+    }
+  }
 }
 
-
-void modulateNeuralInterferance(int trace_idx) {
-  
-}
 
 
 
@@ -69,18 +103,19 @@ void generateNeuralSignal(int trace_idx, int strip) {
   memset( &t, 0, sizeof(struct Trace) );
 
   t.strip = strip;
-  t.seg_len = random( 2, 7 );
+  t.seg_len = random( 2, 5 );
   t.len = t.seg_len * 4;
   t.dir = random( 0, 2 );
   t.pos = random( 50, 250 ); // t.dir > 0 ? 0 : (lens[trace_idx] - t.len - 1);
   t.move_speed = random(1, 4);
   t.cycle_speed = random(1, 3);
-  t.pause = millis() + random(50, 350);
+  t.pause = millis() + random(50, 1500);
   uint32_t max_clr = 127 / 2;
   t.color = strips[0].Color(random(0,max_clr), random(0,max_clr), random(0,max_clr));
   
   memcpy( &traces[trace_idx], &t, sizeof(struct Trace) );
 }
+
 
 int moveNeuralSignal(int trace_idx) {
   
@@ -92,7 +127,7 @@ int moveNeuralSignal(int trace_idx) {
   uint32_t clr = t->color;
   uint32_t i;
 
-  if ((t->pos >= lens[trace_idx]) || (t->pos < 0)) {
+  if ((t->pos >= strip->numPixels()) || (t->pos < 0)) {
     return t->pause > millis();
   }
     
@@ -148,9 +183,14 @@ uint32_t Wheel(byte WheelPos, Adafruit_NeoPixel *strip) {
 }
 
 void setup() {
-//  Serial.begin(9600);  
+  Serial.begin(9600);  
   randomSeed(analogRead(0));
-  
+
+  memset( &sparkles[0], 0, sizeof(sparkles) );
+  for (int j = 0; j < MAX_SPARKLES; j += 1) {
+    sparkles[j].pos = -1;
+  }
+
   pinMode(NEURON_PIN_0, INPUT_PULLUP);
   pinMode(NEURON_PIN_1, INPUT_PULLUP);
   pinMode(NEURON_PIN_2, INPUT_PULLUP);
@@ -172,7 +212,9 @@ void loop() {
       if (!moveNeuralSignal(i))
         generateNeuralSignal(i, 0);
     }
-    
+
+    modulateNeuralInterferance(j);
+
     strips[j].show();
   }
 }
