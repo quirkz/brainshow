@@ -75,7 +75,7 @@ void modulateNeuralInterferance(int strip_idx) {
       if (err_occured) {
         sparkles[i].pos = random(0, strip->numPixels());
         sparkles[i].rads = 0;  
-        sparkles[i].inc = (float)random(1,100)/500.0;
+        sparkles[i].inc = (float)random(1,10)/100.0;
       }
     } else {
       
